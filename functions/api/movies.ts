@@ -53,3 +53,59 @@ export async function onRequestPost(context: any) {
     return new Response(error.message, { status: 500 });
   }
 }
+export async function onRequestDelete(context: any) {
+  try {
+    const { request, env } = context;
+    const body = await request.json();
+    const { movieId, username } = body;
+
+    // Verify that only you (James) can perform this action
+    if (username !== 'James') {
+      return new Response("Unauthorized", { status: 403 });
+    }
+
+    if (!movieId) {
+      return new Response("Missing movie ID", { status: 400 });
+    }
+
+    // 1. Delete associated votes and ratings first to prevent orphaned data
+    await env.DB.prepare(`DELETE FROM votes WHERE movie_id = ?`).bind(movieId).run();
+    await env.DB.prepare(`DELETE FROM ratings WHERE movie_id = ?`).bind(movieId).run();
+    
+    // 2. Delete the actual movie
+    await env.DB.prepare(`DELETE FROM movies WHERE id = ?`).bind(movieId).run();
+
+    return Response.json({ success: true });
+    
+  } catch (error: any) {
+    return new Response(error.message, { status: 500 });
+  }
+}
+export async function onRequestPatch(context: any) {
+  try {
+    const { request, env } = context;
+    const body = await request.json();
+    const { movieId, username } = body;
+
+    // Security check: only you can mark movies as watched
+    if (username !== 'James') {
+      return new Response("Unauthorized", { status: 403 });
+    }
+
+    if (!movieId) {
+      return new Response("Missing movie ID", { status: 400 });
+    }
+
+    // Update the status in the database
+    await env.DB.prepare(`
+      UPDATE movies 
+      SET status = 'watched' 
+      WHERE id = ?
+    `).bind(movieId).run();
+
+    return Response.json({ success: true });
+    
+  } catch (error: any) {
+    return new Response(error.message, { status: 500 });
+  }
+}

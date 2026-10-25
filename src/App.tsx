@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ThumbsUp, ThumbsDown, Check, Film, Star, LogOut } from 'lucide-react';
-
+import { ThumbsUp, ThumbsDown, Check, Film, Star, LogOut, Trash2 } from 'lucide-react';
 interface Movie {
   id: number;
   title: string;
@@ -164,10 +163,50 @@ export default function App() {
   };
 
   const handleMarkWatched = async (id: number) => {
+    if (!isAdmin || !currentUser) return;
+
+    // 1. Optimistic UI update (instantly moves it to the Watched tab for you)
     setMovies(movies.map(m => 
       m.id === id ? { ...m, status: 'watched' } : m
     ));
-    // TODO: Send PATCH request
+
+    // 2. Send PATCH request to Cloudflare to permanently save the change
+    try {
+      await fetch('/api/movies', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          movieId: id,
+          username: currentUser
+        })
+      });
+    } catch (error) {
+      console.error("Failed to mark as watched:", error);
+    }
+  };
+
+  const handleDeleteMovie = async (id: number) => {
+    if (!isAdmin || !currentUser) return;
+    
+    const confirmDelete = window.confirm("Are you sure you want to delete this movie entirely?");
+    if (!confirmDelete) return;
+
+    // 1. Optimistic UI update
+    setMovies(movies.filter(m => m.id !== id));
+
+    // 2. Send DELETE request to Cloudflare
+    try {
+      await fetch('/api/movies', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          movieId: id,
+          username: currentUser
+        })
+      });
+    } catch (error) {
+      console.error("Failed to delete movie:", error);
+    }
   };
 
   // --- LOGIN SCREEN ---
@@ -283,18 +322,29 @@ export default function App() {
                   <p style={{ margin: '0 0 5px 0', fontSize: '0.9rem' }}>
                     Group Avg: <Star size={14} style={{ display: 'inline', marginBottom: '-2px' }}/> {movie.avgRating || 'Unrated'}
                   </p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <span style={{ fontSize: '0.8rem' }}>Your rating:</span>
-                    <select 
-                      value={movie.userRating || ''} 
-                      onChange={(e) => handleRate(movie.id, Number(e.target.value))}
-                      style={{ padding: '2px 5px' }}
-                    >
-                      <option value="" disabled>-</option>
-                      {[1,2,3,4,5,6,7,8,9,10].map(num => (
-                        <option key={num} value={num}>{num}</option>
-                      ))}
-                    </select>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <span style={{ fontSize: '0.8rem' }}>Your rating:</span>
+                      <select 
+                        value={movie.userRating || ''} 
+                        onChange={(e) => handleRate(movie.id, Number(e.target.value))}
+                        style={{ padding: '2px 5px' }}
+                      >
+                        <option value="" disabled>-</option>
+                        {[1,2,3,4,5,6,7,8,9,10].map(num => (
+                          <option key={num} value={num}>{num}</option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    {isAdmin && (
+                      <button 
+                        onClick={() => handleDeleteMovie(movie.id)} 
+                        style={{ padding: '4px 8px', background: 'transparent', color: '#dc3545', border: '1px solid #dc3545', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -318,12 +368,20 @@ export default function App() {
                   </button>
                 </div>
                 {isAdmin && (
-                  <button 
-                    onClick={() => handleMarkWatched(movie.id)} 
-                    style={{ padding: '5px', background: 'green', color: 'white', border: 'none', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', cursor: 'pointer' }}
-                  >
-                    <Check size={16} /> Watched
-                  </button>
+                  <>
+                    <button 
+                      onClick={() => handleMarkWatched(movie.id)} 
+                      style={{ padding: '5px', background: 'green', color: 'white', border: 'none', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', cursor: 'pointer' }}
+                    >
+                      <Check size={16} /> Watched
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteMovie(movie.id)} 
+                      style={{ padding: '5px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </  >
                 )}
               </div>
             )}
