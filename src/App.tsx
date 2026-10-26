@@ -12,7 +12,11 @@ interface Movie {
 }
 
 // Populated using your recent team list
-const USERS = ['Cole', 'Isaiah', 'James', 'Matt', 'Tim', 'Veronica'];
+const USERS = [
+  'Weindel', 'China', 'James', 'Isaac E.', 'Colsen', 'Josh', 'Jake', 'Malachi', 'Call', 'Ben',
+  'Sam', 'Nolan', 'Kaiden', 'Asher', 'Tyler', 'Crint', 'Carter', 'Carson', 'McCants', 'Luke', 'Micah',
+  'Owen', 'Burtt', 'Eli'
+];
 const ADMIN_PIN = '1234'; // Change this to your actual PIN
 
 export default function App() {
