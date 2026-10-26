@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import './App.css';
 import { ThumbsUp, ThumbsDown, Check, Film, Star, LogOut, Trash2 } from 'lucide-react';
 interface Movie {
   id: number;
@@ -6,16 +7,17 @@ interface Movie {
   image_url: string;
   status: 'watchlist' | 'watched';
   votes: number;
+  upvotes: number;
+  downvotes: number;
   userVote?: number; // 1 for upvote, -1 for downvote, 0 for none
   userRating?: number; // 1-10
   avgRating?: number;
 }
 
-// Populated using your recent team list
 const USERS = [
-  'Weindel', 'China', 'James', 'Isaac E.', 'Colsen', 'Josh', 'Jake', 'Malachi', 'Call', 'Ben',
-  'Sam', 'Nolan', 'Kaiden', 'Asher', 'Tyler', 'Crint', 'Carter', 'Carson', 'McCants', 'Luke', 'Micah',
-  'Owen', 'Burtt', 'Eli'
+  'Asher', 'Ben', 'Burtt', 'Call', 'Carson', 'Carter', 'China', 'Colsen', 'Crint',
+  'Eli', 'Isaac E.', 'Jake', 'James', 'Josh', 'Kaiden','Luke', 'Malachi', 'McCants', 
+  'Micah', 'Nolan', 'Owen', 'Sam', 'Tyler', 'Weindel'
 ];
 const ADMIN_PIN = '1234'; // Change this to your actual PIN
 
@@ -80,8 +82,10 @@ export default function App() {
       title: newTitle,
       image_url: newImage,
       status: 'watchlist',
-      votes: 0,       // Changed from 1
-      userVote: 0     // Changed from 1
+      votes: 0,
+      upvotes: 0,
+      downvotes: 0, 
+      userVote: 0
     };
     
     setMovies([...movies, tempMovie].sort((a, b) => b.votes - a.votes));
@@ -107,17 +111,38 @@ export default function App() {
   };
 
   const handleVote = async (id: number, increment: number) => {
-    // 1. Optimistic UI update (feels instant to the user)
+    let targetVote = increment;
+
     setMovies(movies.map(m => {
       if (m.id === id) {
-        if (m.userVote === increment) return m; 
         const oldVote = m.userVote || 0;
-        return { ...m, votes: m.votes - oldVote + increment, userVote: increment };
+        if (oldVote === increment) targetVote = 0; // Unvoting
+        
+        let newUpvotes = m.upvotes || 0;
+        let newDownvotes = m.downvotes || 0;
+
+        // Remove old vote logic
+        if (oldVote === 1) newUpvotes -= 1;
+        if (oldVote === -1) newDownvotes -= 1;
+
+        // Add new target vote logic
+        if (targetVote === 1) newUpvotes += 1;
+        if (targetVote === -1) newDownvotes += 1;
+
+        const newTotal = m.votes - oldVote + targetVote;
+
+        return { 
+          ...m, 
+          votes: newTotal, 
+          userVote: targetVote,
+          upvotes: newUpvotes,
+          downvotes: newDownvotes
+        };
       }
       return m;
     }).sort((a, b) => b.votes - a.votes));
 
-    // 2. Send the actual request to Cloudflare
+    // 2. Send the actual request to Cloudflare with the calculated targetVote
     try {
       await fetch('/api/vote', {
         method: 'POST',
@@ -125,12 +150,11 @@ export default function App() {
         body: JSON.stringify({
           movieId: id,
           username: currentUser,
-          voteDir: increment
+          voteDir: targetVote
         })
       });
     } catch (error) {
       console.error("Vote failed:", error);
-      // Optional: revert the UI state here if the fetch fails
     }
   };
 
@@ -243,7 +267,7 @@ export default function App() {
 
           {loginError && <p style={{ color: 'red', margin: 0 }}>{loginError}</p>}
           
-          <button type="submit" style={{ padding: '10px', background: '#333', color: 'white', border: 'none', borderRadius: '5px' }}>
+          <button type="submit" className="login-btn">
             Enter
           </button>
         </form>
@@ -253,86 +277,114 @@ export default function App() {
 
   // --- MAIN APP SCREEN ---
   const displayedMovies = movies.filter(m => m.status === activeTab);
-
   return (
-    <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px', fontFamily: 'sans-serif' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h1 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}><Film /> Movie Night</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+    <div className="app-container">
+      <header className="app-header">
+        <h1><Film /> Movie Night</h1>
+        <div className="user-info">
           <span>Hey, <strong>{currentUser}</strong> {isAdmin && '(Admin)'}</span>
-          <button onClick={() => setCurrentUser(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }} title="Logout">
+          <button onClick={() => setCurrentUser(null)} className="logout-btn" title="Logout">
             <LogOut size={20} />
           </button>
         </div>
       </header>
 
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+      <div className="tab-container">
         <button 
           onClick={() => setActiveTab('watchlist')}
-          style={{ flex: 1, padding: '10px', background: activeTab === 'watchlist' ? '#333' : '#eee', color: activeTab === 'watchlist' ? 'white' : 'black', border: 'none', borderRadius: '5px' }}
+          className={`tab-btn ${activeTab === 'watchlist' ? 'active' : ''}`}
         >
           Watchlist
         </button>
         <button 
           onClick={() => setActiveTab('watched')}
-          style={{ flex: 1, padding: '10px', background: activeTab === 'watched' ? '#333' : '#eee', color: activeTab === 'watched' ? 'white' : 'black', border: 'none', borderRadius: '5px' }}
+          className={`tab-btn ${activeTab === 'watched' ? 'active' : ''}`}
         >
           Watched
         </button>
       </div>
 
       {activeTab === 'watchlist' && (
-        <form onSubmit={handleAddMovie} style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+        <form onSubmit={handleAddMovie} className="add-movie-form">
           <input 
             type="text" 
             placeholder="Movie Title" 
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
-            style={{ flex: 2, padding: '10px' }}
+            className="dark-input"
+            style={{ flex: 1 }}
           />
           <input 
             type="text" 
             placeholder="Image URL (optional)" 
             value={newImage}
             onChange={(e) => setNewImage(e.target.value)}
-            style={{ flex: 2, padding: '10px' }}
+            className="dark-input"
+            style={{ flex: 1 }}
           />
-          <button type="submit" style={{ padding: '10px', background: 'blue', color: 'white', border: 'none', borderRadius: '5px' }}>Add</button>
+          <button type="submit" className="add-btn">Add Movie</button>
         </form>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-        {displayedMovies.length === 0 && <p>No movies here yet!</p>}
+      <div className="movie-grid">
+        {displayedMovies.length === 0 && <p style={{ color: '#888' }}>No movies here yet!</p>}
         
         {displayedMovies.map(movie => (
-          <div key={movie.id} style={{ display: 'flex', alignItems: 'center', padding: '10px', border: '1px solid #ccc', borderRadius: '8px', gap: '15px' }}>
+          <div key={movie.id} className="movie-card">
             {movie.image_url ? (
-              <img src={movie.image_url} alt={movie.title} style={{ width: '60px', height: '90px', objectFit: 'cover', borderRadius: '4px' }} />
+              <img src={movie.image_url} alt={movie.title} className="movie-image" />
             ) : (
-              <div style={{ width: '60px', height: '90px', background: '#eee', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>No img</div>
+              <div className="movie-image empty-image">
+                <Film size={48} color="#555" />
+              </div>
             )}
             
-            <div style={{ flex: 1 }}>
-              <h3 style={{ margin: '0 0 5px 0' }}>{movie.title}</h3>
+            <div className="movie-content">
+              <h3 className="movie-title">{movie.title}</h3>
               
-              {/* Watchlist View */}
+              {/* Watchlist Actions */}
               {movie.status === 'watchlist' && (
-                <p style={{ margin: 0, color: '#666', fontWeight: 'bold' }}>Votes: {movie.votes}</p>
+                <div className="vote-container">
+                  <button 
+                    onClick={() => handleVote(movie.id, 1)} 
+                    className={`vote-btn ${movie.userVote === 1 ? 'active-up' : ''}`}
+                  >
+                    <ThumbsUp size={18} /> {movie.upvotes || 0}
+                  </button>
+                  <button 
+                    onClick={() => handleVote(movie.id, -1)} 
+                    className={`vote-btn ${movie.userVote === -1 ? 'active-down' : ''}`}
+                  >
+                    <ThumbsDown size={18} /> {movie.downvotes || 0}
+                  </button>
+                  
+                  {isAdmin && (
+                    <div className="admin-controls">
+                      <button onClick={() => handleMarkWatched(movie.id)} className="admin-btn success" title="Mark Watched">
+                        <Check size={18} />
+                      </button>
+                      <button onClick={() => handleDeleteMovie(movie.id)} className="admin-btn danger" title="Delete">
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
 
-              {/* Watched View */}
+              {/* Watched Actions */}
               {movie.status === 'watched' && (
-                <div style={{ marginTop: '10px' }}>
-                  <p style={{ margin: '0 0 5px 0', fontSize: '0.9rem' }}>
-                    Group Avg: <Star size={14} style={{ display: 'inline', marginBottom: '-2px' }}/> {movie.avgRating || 'Unrated'}
+                <div className="watched-controls">
+                  <p className="group-avg">
+                    Group Avg: <Star size={14} style={{ display: 'inline', marginBottom: '-2px', color: '#fbbf24' }}/> {movie.avgRating || 'Unrated'}
                   </p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      <span style={{ fontSize: '0.8rem' }}>Your rating:</span>
+                  <div className="rating-row">
+                    <div className="user-rating-select">
+                      <span>Your rating:</span>
                       <select 
                         value={movie.userRating || ''} 
                         onChange={(e) => handleRate(movie.id, Number(e.target.value))}
-                        style={{ padding: '2px 5px' }}
+                        className="dark-input"
+                        style={{ padding: '6px' }}
                       >
                         <option value="" disabled>-</option>
                         {[1,2,3,4,5,6,7,8,9,10].map(num => (
@@ -342,53 +394,14 @@ export default function App() {
                     </div>
                     
                     {isAdmin && (
-                      <button 
-                        onClick={() => handleDeleteMovie(movie.id)} 
-                        style={{ padding: '4px 8px', background: 'transparent', color: '#dc3545', border: '1px solid #dc3545', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                      >
-                        <Trash2 size={14} />
+                      <button onClick={() => handleDeleteMovie(movie.id)} className="admin-btn danger-outline" title="Delete">
+                        <Trash2 size={16} />
                       </button>
                     )}
                   </div>
                 </div>
               )}
             </div>
-
-            {/* Watchlist Actions */}
-            {movie.status === 'watchlist' && (
-              <div style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
-                <div style={{ display: 'flex', gap: '5px' }}>
-                  <button 
-                    onClick={() => handleVote(movie.id, 1)} 
-                    style={{ padding: '5px', cursor: 'pointer', background: movie.userVote === 1 ? '#d4edda' : 'white', border: '1px solid #ccc', borderRadius: '4px' }}
-                  >
-                    <ThumbsUp size={18} color={movie.userVote === 1 ? 'green' : 'black'} />
-                  </button>
-                  <button 
-                    onClick={() => handleVote(movie.id, -1)} 
-                    style={{ padding: '5px', cursor: 'pointer', background: movie.userVote === -1 ? '#f8d7da' : 'white', border: '1px solid #ccc', borderRadius: '4px' }}
-                  >
-                    <ThumbsDown size={18} color={movie.userVote === -1 ? 'red' : 'black'} />
-                  </button>
-                </div>
-                {isAdmin && (
-                  <>
-                    <button 
-                      onClick={() => handleMarkWatched(movie.id)} 
-                      style={{ padding: '5px', background: 'green', color: 'white', border: 'none', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', cursor: 'pointer' }}
-                    >
-                      <Check size={16} /> Watched
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteMovie(movie.id)} 
-                      style={{ padding: '5px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </  >
-                )}
-              </div>
-            )}
           </div>
         ))}
       </div>

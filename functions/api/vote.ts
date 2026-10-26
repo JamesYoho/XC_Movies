@@ -4,18 +4,25 @@ export async function onRequestPost(context: any) {
     const body = await request.json();
     const { movieId, username, voteDir } = body;
 
-    // Validate inputs
-    if (!movieId || !username || ![1, -1].includes(voteDir)) {
+    // Allow 0 as a valid vote direction (meaning "unvote")
+    if (!movieId || !username || ![1, -1, 0].includes(voteDir)) {
       return new Response("Invalid payload", { status: 400 });
     }
 
-    // 1. Insert or update the user's vote
-    // If they already voted on this movie, it overwrites their old vote direction
-    await env.DB.prepare(`
-      INSERT INTO votes (movie_id, username, vote_dir) 
-      VALUES (?, ?, ?)
-      ON CONFLICT(movie_id, username) DO UPDATE SET vote_dir = excluded.vote_dir
-    `).bind(movieId, username, voteDir).run();
+    if (voteDir === 0) {
+      // 1. Remove the user's vote entirely
+      await env.DB.prepare(`
+        DELETE FROM votes 
+        WHERE movie_id = ? AND username = ?
+      `).bind(movieId, username).run();
+    } else {
+      // 1. Insert or update the user's vote
+      await env.DB.prepare(`
+        INSERT INTO votes (movie_id, username, vote_dir) 
+        VALUES (?, ?, ?)
+        ON CONFLICT(movie_id, username) DO UPDATE SET vote_dir = excluded.vote_dir
+      `).bind(movieId, username, voteDir).run();
+    }
 
     // 2. Recalculate the true total score for the movie
     const { results } = await env.DB.prepare(`
@@ -26,7 +33,7 @@ export async function onRequestPost(context: any) {
 
     const newTotal = results[0].total_votes || 0;
 
-    // 3. Cache the new total in the movies table so the main feed loads fast
+    // 3. Cache the new total
     await env.DB.prepare(`
       UPDATE movies 
       SET votes = ? 
