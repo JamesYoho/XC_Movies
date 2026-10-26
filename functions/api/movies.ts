@@ -37,18 +37,27 @@ export async function onRequestPost(context: any) {
     const body = await request.json();
     const { title, image_url, username } = body;
 
-    if (!title || !username) {
-      return new Response("Missing title or username", { status: 400 });
+    // 1. Require all fields
+    if (!title || !image_url || !username) {
+      return new Response("Missing title, image URL, or username", { status: 400 });
     }
 
-    // 1. Insert the movie with 0 votes and get its generated ID back
+    // 2. Check database for duplicate (case-insensitive)
+    const existingMovie = await env.DB.prepare(`
+      SELECT id FROM movies WHERE LOWER(title) = LOWER(?)
+    `).bind(title).first();
+
+    if (existingMovie) {
+      return new Response("Movie already exists", { status: 409 });
+    }
+
+    // 3. Insert the movie
     const insertedMovie = await env.DB.prepare(`
       INSERT INTO movies (title, image_url, status, votes) 
       VALUES (?, ?, 'watchlist', 0)
       RETURNING id
-    `).bind(title, image_url || null).first();
+    `).bind(title, image_url).first();
 
-    // 2. Return the new movie ID (we no longer insert a vote here)
     return Response.json({ success: true, id: insertedMovie.id });
     
   } catch (error: any) {

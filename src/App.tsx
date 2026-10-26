@@ -74,27 +74,42 @@ export default function App() {
 
   const handleAddMovie = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle || !currentUser) return;
+    
+    // 1. Enforce both title and image exist
+    if (!newTitle.trim() || !newImage.trim() || !currentUser) {
+      alert("Please provide both a movie title and an image URL.");
+      return;
+    }
 
-    // 1. Optimistic UI update
+    // 2. Check for duplicates (case-insensitive)
+    const isDuplicate = movies.some(
+      m => m.title.toLowerCase() === newTitle.trim().toLowerCase()
+    );
+
+    if (isDuplicate) {
+      alert("A movie with this title is already on the list!");
+      return;
+    }
+
+    // 3. Optimistic UI update
     const tempMovie: Movie = {
       id: Date.now(), 
-      title: newTitle,
-      image_url: newImage,
+      title: newTitle.trim(),
+      image_url: newImage.trim(),
       status: 'watchlist',
       votes: 0,
       upvotes: 0,
-      downvotes: 0, 
+      downvotes: 0,
       userVote: 0
     };
     
-    setMovies([...movies, tempMovie].sort((a, b) => b.votes - a.votes));
+    setMovies([...movies, tempMovie].sort((a, b) => (b.votes || 0) - (a.votes || 0)));
     setNewTitle('');
     setNewImage('');
 
-    // 2. Send the POST request
+    // 4. Send the POST request
     try {
-      await fetch('/api/movies', {
+      const response = await fetch('/api/movies', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -104,7 +119,12 @@ export default function App() {
         })
       });
       
-      fetchMovies(); 
+      if (!response.ok) {
+        console.error("Failed to add to database, status:", response.status);
+        // Optional: You could remove the optimistic tempMovie here if the DB fails
+      } else {
+        fetchMovies(); 
+      }
     } catch (error) {
       console.error("Failed to add movie:", error);
     }
@@ -304,6 +324,7 @@ export default function App() {
         </button>
       </div>
 
+
       {activeTab === 'watchlist' && (
         <form onSubmit={handleAddMovie} className="add-movie-form">
           <input 
@@ -313,14 +334,16 @@ export default function App() {
             onChange={(e) => setNewTitle(e.target.value)}
             className="dark-input"
             style={{ flex: 1 }}
+            required
           />
           <input 
             type="text" 
-            placeholder="Image URL (optional)" 
+            placeholder="Image URL" 
             value={newImage}
             onChange={(e) => setNewImage(e.target.value)}
             className="dark-input"
             style={{ flex: 1 }}
+            required
           />
           <button type="submit" className="add-btn">Add Movie</button>
         </form>
